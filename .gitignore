@@ -1,0 +1,5 @@
+node_modules/
+clientsettings/
+Backend.zip
+jwt.secret
+.env
