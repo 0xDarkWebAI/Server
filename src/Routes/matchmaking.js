@@ -12,25 +12,46 @@ function makeId() {
   return uuidv4().replace(/-/gi, "").toUpperCase();
 }
 
+let currentHostIp = "127.0.0.1";
+
 function getMatchmakerIp() {
-  const raw = (process.env.MATCHMAKER_IP || "127.0.0.1:81").trim();
-  if (raw.startsWith("ws://") || raw.startsWith("wss://")) return raw;
-  return `ws://${raw}`;
+  const raw = process.env.MATCHMAKER_IP;
+  if (raw && raw.trim().length > 0) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) return trimmed;
+    return `ws://${trimmed}`;
+  }
+  return `ws://${currentHostIp}:6969`;
 }
 
 function getGameServerInfo() {
-  const firstServer = (process.env.GAMESERVER_IP || "127.0.0.1:7777")
+  const firstServer = (process.env.GAMESERVER_IP || currentHostIp + ":7777")
     .split(",")
     .map((entry) => entry.trim())
     .find((entry) => entry.length > 0);
 
-  const parts = (firstServer || "127.0.0.1:7777").split(":");
-  const serverAddress = parts[0] || "127.0.0.1";
+  const parts = (firstServer || currentHostIp + ":7777").split(":");
+  const serverAddress = parts[0] || currentHostIp;
   const parsedPort = Number(parts[1]);
   const serverPort = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 7777;
 
   return { serverAddress, serverPort };
 }
+
+app.post("/api/setHostIp", (req, res) => {
+  let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  if (ip.includes("::ffff:")) {
+    ip = ip.split("::ffff:")[1];
+  }
+  if (ip === "::1" || ip === "127.0.0.1") {
+    // If local test, use local
+    currentHostIp = "127.0.0.1";
+  } else {
+    currentHostIp = ip;
+  }
+  console.log(`[Matchmaker] Host IP updated dynamically to: ${currentHostIp}`);
+  res.json({ status: "ok", hostIp: currentHostIp });
+});
 
 async function getUsernameFromAccountId(accountId) {
   if (!accountId) return "";
