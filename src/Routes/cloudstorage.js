@@ -126,7 +126,7 @@ app.get(
       `ClientSettings-${userid}-${memory.season}.Sav`
     );
     if (fs.existsSync(file)) return res.status(200).send(fs.readFileSync(file));
-    res.status(404).end();
+    res.status(200).end();
   }
 );
 app.get("/fortnite/api/cloudstorage/user/:accountId", verifyToken, async (req, res) => {

@@ -15,13 +15,9 @@ function makeId() {
 let currentHostIp = "127.0.0.1";
 
 function getMatchmakerIp() {
-  const raw = process.env.MATCHMAKER_IP;
-  if (raw && raw.trim().length > 0) {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) return trimmed;
-    return `ws://${trimmed}`;
-  }
-  return `ws://${currentHostIp}:6969`;
+  const raw = (process.env.MATCHMAKER_IP || currentHostIp + ":6969").trim();
+  if (raw.startsWith("ws://") || raw.startsWith("wss://")) return raw;
+  return `ws://${raw}`;
 }
 
 function getGameServerInfo() {
