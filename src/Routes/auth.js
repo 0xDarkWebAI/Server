@@ -81,7 +81,6 @@ app.post("/account/api/oauth/token", async (req, res) => {
       
       if (!req.user) {
         // Auto-create account if not found
-        const hashedPassword = await bcrypt.hash(password, 10);
         let displayName = email.split("@")[0];
         let uniqueName = displayName;
         let existingUser = await User.findOne({ username_lower: uniqueName.toLowerCase() });
@@ -93,24 +92,22 @@ app.post("/account/api/oauth/token", async (req, res) => {
         }
         
         const newAccountId = uuidv4().replace(/-/g, "");
-        const newUser = new User({
-          created: new Date(),
-          banned: false,
-          discordId: "auto-" + newAccountId,
-          accountId: newAccountId,
-          username: uniqueName,
-          username_lower: uniqueName.toLowerCase(),
-          email: email.toLowerCase(),
-          password: hashedPassword,
-          mfa: false,
-          canCreateCodes: false,
-          isOnline: false,
-          played: false
-        });
+        const regRes = await Utils.CreateUser("auto-" + newAccountId, uniqueName, email, password, false);
+        if (regRes.status !== 200) {
+          log.error(`Auto-creation failed for email: ${email}: ${regRes.message}`);
+          return Utils.createError(
+            "errors.com.epicgames.account.invalid_account_credentials",
+            regRes.message || "Your e-mail and/or password are incorrect. Please check them and try again.",
+            [],
+            18031,
+            "invalid_grant",
+            400,
+            res
+          );
+        }
         
-        await newUser.save();
-        req.user = newUser.toObject();
-        log.info(`Auto-created new account for email: ${email} with accountId: ${newAccountId} and username: ${uniqueName}`);
+        req.user = await User.findOne({ email: email.toLowerCase() }).lean();
+        log.info(`Auto-created new account for email: ${email} with accountId: ${req.user.accountId} and username: ${req.user.username}`);
       } else {
         if (!rebootAccount) {
           if (!(await bcrypt.compare(password, req.user.password))) {
