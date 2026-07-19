@@ -78,23 +78,53 @@ app.post("/account/api/oauth/token", async (req, res) => {
       rebootAccount = regex.test(email);
       log.debug(`Reboot account check: ${rebootAccount} for email: ${email}`);
       req.user = await User.findOne({ email: email.toLowerCase() }).lean();
-      let err = () => {
-        log.error(`Invalid credentials for email: ${email}`);
-        Utils.createError(
-          "errors.com.epicgames.account.invalid_account_credentials",
-          "Your e-mail and/or password are incorrect. Please check them and try again.",
-          [],
-          18031,
-          "invalid_grant",
-          400,
-          res
-        );
-      };
-      if (!req.user) return err();
-      else {
+      
+      if (!req.user) {
+        // Auto-create account if not found
+        const hashedPassword = await bcrypt.hash(password, 10);
+        let displayName = email.split("@")[0];
+        let uniqueName = displayName;
+        let existingUser = await User.findOne({ username_lower: uniqueName.toLowerCase() });
+        let attempts = 0;
+        while (existingUser && attempts < 10) {
+          uniqueName = displayName + Math.floor(Math.random() * 1000);
+          existingUser = await User.findOne({ username_lower: uniqueName.toLowerCase() });
+          attempts++;
+        }
+        
+        const newAccountId = uuidv4().replace(/-/g, "");
+        const newUser = new User({
+          created: new Date(),
+          banned: false,
+          discordId: "auto-" + newAccountId,
+          accountId: newAccountId,
+          username: uniqueName,
+          username_lower: uniqueName.toLowerCase(),
+          email: email.toLowerCase(),
+          password: hashedPassword,
+          mfa: false,
+          canCreateCodes: false,
+          isOnline: false,
+          played: false
+        });
+        
+        await newUser.save();
+        req.user = newUser.toObject();
+        log.info(`Auto-created new account for email: ${email} with accountId: ${newAccountId} and username: ${uniqueName}`);
+      } else {
         if (!rebootAccount) {
-          if (!(await bcrypt.compare(password, req.user.password)))
-            return err();
+          if (!(await bcrypt.compare(password, req.user.password))) {
+            log.error(`Invalid credentials for email: ${email}`);
+            return Utils.createError(
+              "errors.com.epicgames.account.invalid_account_credentials",
+              "Your e-mail and/or password are incorrect. Please check them and try again.",
+              [],
+              18031,
+              "invalid_grant",
+              400,
+              res
+            );
+          }
         }
         log.info(`Successful password authentication for user: ${req.user.accountId}`);
       }
